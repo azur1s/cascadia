@@ -3,6 +3,8 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Infer where
 
+import Debug.Trace
+
 import Syntax
 import Control.Monad
 import Control.Monad.State
@@ -211,27 +213,30 @@ infer (Ops op l r) = do
     (l', lt, s1) <- infer l
     applyEnv s1
     (r', rt, s2) <- infer r
-    -- Make sure that the types of the operands match the expected types
-    expected <- case op of
-        "+"  -> return TInt
-        "-"  -> return TInt
-        "*"  -> return TInt
-        "/"  -> return TInt
-        "==" -> return TInt
-        "&&" -> return TBool
-        "||" -> return TBool
-        _    -> throwError $ "unknown operator " ++ op
-    s3 <- case unify (apply s2 lt) expected of
-        Just s  -> return s
-        Nothing -> throwError $ "Type mismatch: expected " ++ fmtType expected
-                ++ " but got " ++ fmtType (apply s2 lt)
-    -- Make sure that both operands have the same type
-    s4 <- case unify (apply s3 rt) (apply s3 lt) of
-        Just s  -> return s
-        Nothing -> throwError $ "Type mismatch: expected " ++ fmtType (apply s3 lt)
-                ++ " but got " ++ fmtType (apply s3 rt)
-    return (OpsT op (apply s4 l') (apply s4 r') (apply s4 lt),
-        apply s4 lt, s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1)
+    applyEnv s2
+
+    (el, er, ret) <- case op of
+        op | op `elem` ["+", "-", "*", "/"]   -> return (TInt, TInt, TInt)
+           | op `elem` ["==", "!="]           -> newFresh >>= \t -> return (t, t, TBool)
+           -- TODO: Equality Typeclass
+           | op `elem` ["<", "<=", ">", ">="] -> return (TInt, TInt, TBool)
+           | op `elem` ["&&", "||"]           -> return (TBool, TBool, TBool)
+        _ -> throwError $ "unknown operator " ++ op
+
+    s3 <- either throwError return (checkOperand lt el)
+    applyEnv s3
+    s4 <- either throwError return (checkOperand rt er)
+    applyEnv s4
+
+    let t = apply s4 ret
+    return (OpsT op (apply s4 l') (apply s4 r') t, t,
+        s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1)
+    where
+        checkOperand x t = case unify x t of
+            Just s  -> Right s
+            Nothing -> Left $ "Type mismatch: Operator " ++ op
+                    ++ " expected " ++ fmtType t ++ " but got "
+                    ++ fmtType x
 
 inferTop :: Top -> Infer (TopT, Type, Subst)
 inferTop (Decl n e) = do

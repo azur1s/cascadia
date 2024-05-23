@@ -95,12 +95,21 @@ expr = Ex.buildExpressionParser table term
     where
         table = [
             [ binary "*"  (Ops "*")
+            , binary "/"  (Ops "/")
+            , binary "%"  (Ops "%")
             ],
             [ binary "+"  (Ops "+")
+            , binary "-"  (Ops "-")
             ],
             [ binary "==" (Ops "==")
+            , binary "!=" (Ops "!=")
+            , binary "<"  (Ops "<")
+            , binary "<=" (Ops "<=")
+            , binary ">"  (Ops ">")
+            , binary ">=" (Ops ">=")
             ],
             [ binary "&&" (Ops "&&")
+            , binary "||" (Ops "||")
             ]
           ]
         binary name f = Ex.Infix (reservedOp name >> return f) Ex.AssocLeft

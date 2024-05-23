@@ -66,6 +66,7 @@ executable cascadia
         Syntax,
         Parse,
         Infer,
+        Renamer,
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

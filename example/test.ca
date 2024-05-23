@@ -1,2 +1,1 @@
-T = \x y -> x;
-F = \x y -> y;
+test = (\x -> x + x == x);
