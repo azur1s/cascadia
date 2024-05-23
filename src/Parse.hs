@@ -50,6 +50,7 @@ reserved   = P.reserved lexer
 reservedOp = P.reservedOp lexer
 ident      = P.identifier lexer
 parens     = P.parens lexer
+semi       = P.semi lexer
 
 contents :: Parser a -> Parser a
 contents p = do
@@ -104,5 +105,19 @@ expr = Ex.buildExpressionParser table term
           ]
         binary name f = Ex.Infix (reservedOp name >> return f) Ex.AssocLeft
 
-runParser :: String -> Either ParseError Expr
-runParser src = parse (contents expr) "<input>" $ L.pack src
+decl :: Parser Top
+decl = do
+    name <- ident
+    reservedOp "="
+    body <- expr
+    _ <- semi
+    return $ Decl name body
+
+top :: Parser Top
+top = decl
+
+modl :: Parser [Top]
+modl = many top
+
+runParser :: String -> String -> Either ParseError [Top]
+runParser src path = parse (contents modl) path $ L.pack src

@@ -5,6 +5,7 @@ import Parse
 import Infer
 
 import System.Environment
+import Data.List (intercalate)
 
 main :: IO ()
 main = do
@@ -12,16 +13,14 @@ main = do
     case args of
         [file] -> do
             src <- readFile file
-            case runParser src of
+            case runParser src file of
                 Left err   -> print err
-                Right pexp -> do
-                    putStrLn $ "Parsed       : " ++ fmtExpr pexp
-                        ++ "\n\ESC[2;37m               " ++ show pexp
-                        ++ "\ESC[0m"
-                    case runInfer $ infer [] pexp of
+                Right tops -> do
+                    putStrLn $ "Parsed       : "
+                        ++ intercalate "\n               " (map fmtTop tops)
+                    case runInfer $ inferTops tops of
                         Left err -> putStrLn err
-                        Right (e, t, s)
-                            -> putStrLn ("Inferred     : " ++ fmtExprT e)
-                            >> putStrLn ("Expr Type    : " ++ fmtType t)
-                            >> putStrLn ("Substitution : " ++ show s)
+                        Right topsT -> do
+                            putStrLn $ "Inferred     : "
+                                ++ intercalate "\n               " (map fmtTopT topsT)
         _ -> putStrLn "Invalid arguments. Usage: cascadia <file>"

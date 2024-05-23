@@ -64,4 +64,18 @@ fmtType (TArrow l r) = fmt' l ++ " -> " ++ fmt' r
     where fmt' x = case x of
             TArrow _ _ -> "(" ++ fmtType x ++ ")"
             _          -> fmtType x
--- fmtType (TArrow l r) = "(" ++ fmtType l ++ " -> " ++ fmtType r ++ ")"
+
+-- | Top-level statements
+data Top
+    = Decl String Expr
+    deriving (Show, Eq)
+
+fmtTop :: Top -> String
+fmtTop (Decl v e) = v ++ " = " ++ fmtExpr e
+
+data TopT
+    = DeclT String ExprT Type
+    deriving (Show, Eq)
+
+fmtTopT :: TopT -> String
+fmtTopT (DeclT v e t) = v ++ " : " ++ fmtType t ++ " = " ++ fmtExprT e

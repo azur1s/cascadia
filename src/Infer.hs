@@ -11,7 +11,7 @@ import Data.Bifunctor
 import Data.List
 
 tyVar :: Int -> Type
-tyVar i = TVar $ ([1..] >>= flip replicateM ['a'..'z']) !! i
+tyVar i = TVar $ "'" ++ ([1..] >>= flip replicateM ['a'..'z']) !! i
 
 -- | Scheme
 data Scheme where
@@ -119,15 +119,30 @@ bind u t | t == TVar u    = Just nullSubst
          | otherwise      = Just [(u, t)]
 
 -- | Type inference monad
-type Infer a = StateT Int (Except String) a
+type Infer a = StateT (Int, TypeEnv) (Except String) a
+
+getCounter :: Infer Int
+getCounter = gets fst
+
+putCounter :: Int -> Infer ()
+putCounter i = modify $ first (const i)
+
+getEnv :: Infer TypeEnv
+getEnv = gets snd
+
+putEnv :: TypeEnv -> Infer ()
+putEnv env = modify $ second (const env)
+
+applyEnv :: Subst -> Infer ()
+applyEnv s = getEnv >>= putEnv . apply s
 
 runInfer :: Infer a -> Either String a
-runInfer m = runExcept $ evalStateT m 0
+runInfer m = runExcept $ evalStateT m (0, [])
 
 newFresh :: Infer Type
 newFresh = do
-    i <- get
-    put $ i + 1
+    i <- getCounter
+    putCounter (i + 1)
     return $ tyVar i
 
 -- | Instantiate a polymorphic type scheme with fresh type variables
@@ -143,23 +158,25 @@ lookupEnv env v = case lookup v env of
     Just s  -> instantiate s
     Nothing -> throwError $ "unbound variable " ++ v
 
-infer :: TypeEnv -> Expr -> Infer (ExprT, Type, Subst)
-infer _ (Lit l) = return (LitT l, litType l, nullSubst)
+infer :: Expr -> Infer (ExprT, Type, Subst)
+infer (Lit l) = return (LitT l, litType l, nullSubst)
     where
         litType (LInt _)  = TInt
         litType (LBool _) = TBool
 
-infer env (Var v) = do
+infer (Var v) = do
+    env <- getEnv
     t <- lookupEnv env v
     return (VarT v t, t, nullSubst)
 
-infer env (App f args) = do
+infer (App f args) = do
     -- Infer the type of the function
-    (f', ft, s1) <- infer env f
+    (f', ft, s1) <- infer f
     -- Infer the types of the arguments
     (at, ts, s2) <- foldM
         (\(args', ts, s) arg -> do
-            (arg', at, s') <- infer (apply s env) arg
+            applyEnv s
+            (arg', at, s') <- infer arg
             return (args' ++ [arg'], ts ++ [at], s' `composeSubst` s))
         ([], [], nullSubst) args
 
@@ -174,22 +191,26 @@ infer env (App f args) = do
     return (AppT (apply s3 f') (map (apply s3) at) t',
         t', s3 `composeSubst` s2 `composeSubst` s1)
 
-infer env (Lam params e) = do
+infer (Lam params e) = do
     -- Create a new type variable for each parameter
     ts <- mapM (const newFresh) params
     -- Create a new environment with the parameters and their types
+    env <- getEnv
     let env' = env ++ zip (map fst params) (map (Forall []) ts)
+    putEnv env'
     -- Infer the type of the lambda body
-    (e', t, s) <- infer env' e
+    (e', t, s) <- infer e
+    putEnv env
     -- Create a function type from the parameter types to the body type
     let ts' = map (apply s) ts
         t' = foldr TArrow (apply s t) ts'
     return (LamT (zip (map fst params) ts') e' t', t', s)
 
-infer env (Ops op l r) = do
+infer (Ops op l r) = do
     -- Infer the types of the left and right operands
-    (l', lt, s1) <- infer env l
-    (r', rt, s2) <- infer (apply s1 env) r
+    (l', lt, s1) <- infer l
+    applyEnv s1
+    (r', rt, s2) <- infer r
     -- Make sure that the types of the operands match the expected types
     expected <- case op of
         "+"  -> return TInt
@@ -211,3 +232,21 @@ infer env (Ops op l r) = do
                 ++ " but got " ++ fmtType (apply s3 rt)
     return (OpsT op (apply s4 l') (apply s4 r') (apply s4 lt),
         apply s4 lt, s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1)
+
+inferTop :: Top -> Infer (TopT, Type, Subst)
+inferTop (Decl n e) = do
+    env <- getEnv
+    (e', t, s) <- infer e
+    let s' = generalize (apply s env) t
+    putEnv $ (n, s') : env
+    return (DeclT n e' t, t, s)
+
+inferTops :: [Top] -> Infer [TopT]
+inferTops tops = do
+    (tops', _) <- foldM
+        (\(tops', s) top -> do
+            applyEnv s
+            (top', _, s') <- inferTop top
+            return (tops' ++ [top'], s' `composeSubst` s))
+        ([], nullSubst) tops
+    return tops'
