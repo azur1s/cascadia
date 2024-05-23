@@ -17,6 +17,7 @@ data Expr
     | App Expr [Expr]
     | Lam [(String, Maybe Type)] Expr
     | Ops String Expr Expr
+    | If Expr Expr Expr
     deriving (Show, Eq)
 
 fmtExpr :: Expr -> String
@@ -28,6 +29,7 @@ fmtExpr (App f args)     = f' ++ "(" ++ intercalate ", " (map fmtExpr args) ++ "
             _     -> "(" ++ fmtExpr f ++ ")"
 fmtExpr (Lam params e)   = "\\" ++ unwords [v ++ maybe "" ((": " ++) . fmtType) t | (v, t) <- params] ++ ". " ++ fmtExpr e
 fmtExpr (Ops op l r)     = fmtExpr l ++ " " ++ op ++ " " ++ fmtExpr r
+fmtExpr (If c t e)       = "if " ++ fmtExpr c ++ " then " ++ fmtExpr t ++ " else " ++ fmtExpr e
 
 -- | Typed expression
 data ExprT
@@ -36,6 +38,7 @@ data ExprT
     | AppT ExprT [ExprT] Type
     | LamT [(String, Type)] ExprT Type
     | OpsT String ExprT ExprT Type
+    | IfT ExprT ExprT ExprT Type
     deriving (Show, Eq)
 
 fmtExprT :: ExprT -> String
@@ -47,6 +50,7 @@ fmtExprT (AppT f args _)   = f' ++ "(" ++ intercalate ", " (map fmtExprT args) +
             _        -> "(" ++ fmtExprT f ++ ")"
 fmtExprT (LamT params e _) = "\\" ++ unwords [v ++ " : " ++ fmtType t | (v, t) <- params] ++ ". " ++ fmtExprT e
 fmtExprT (OpsT op l r _)   = fmtExprT l ++ " " ++ op ++ " " ++ fmtExprT r
+fmtExprT (IfT c t e _)     = "if " ++ fmtExprT c ++ " then " ++ fmtExprT t ++ " else " ++ fmtExprT e
 
 -- | Types
 data Type

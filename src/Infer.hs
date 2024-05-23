@@ -9,6 +9,7 @@ import Control.Monad.State
 import Control.Monad.Except
 import Data.Bifunctor
 import Data.List
+import Debug.Trace (traceM)
 
 tyLetters :: Int -> String
 tyLetters i = "'" ++ ([1..] >>= flip replicateM ['a'..'z']) !! i
@@ -70,12 +71,14 @@ instance Types ExprT where
     apply s (AppT f args t)   = AppT (apply s f) (map (apply s) args) (apply s t)
     apply s (LamT params e t) = LamT (map (second (apply s)) params) (apply s e) (apply s t)
     apply s (OpsT op l r t)   = OpsT op (apply s l) (apply s r) (apply s t)
+    apply s (IfT c t e t')    = IfT (apply s c) (apply s t) (apply s e) (apply s t')
 
     ftv (LitT _)          = []
     ftv (VarT _ t)        = ftv t
     ftv (AppT f args t)   = ftv f ++ concatMap ftv args ++ ftv t
     ftv (LamT params e t) = ftv (map snd params) ++ ftv e ++ ftv t
     ftv (OpsT _ l r t)    = ftv l ++ ftv r ++ ftv t
+    ftv (IfT c t e t')    = ftv c ++ ftv t ++ ftv e ++ ftv t'
 
 type TypeEnv = [(String, Scheme)]
 
@@ -239,13 +242,52 @@ infer (Ops op l r) = do
                     ++ " expected " ++ fmtType t ++ " but got "
                     ++ fmtType x
 
+infer (If c t e) = do
+    -- Infer the type of the condition
+    (c', ct, s1) <- infer c
+    applyEnv s1
+    -- Infer the types of the then and else branches
+    (t', tt, s2) <- infer t
+    applyEnv s2
+    (e', et, s3) <- infer e
+    applyEnv s3
+
+    s4 <- either throwError return (checkOperand ct TBool)
+    applyEnv s4
+    s5 <- either throwError return (checkOperand tt et)
+    applyEnv s5
+
+    let t = apply s5 tt
+    return (IfT (apply s5 c') (apply s5 t') (apply s5 e') t, t,
+        s5 `composeSubst` s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1)
+    where
+        checkOperand x t = case unify x t of
+            Just s  -> Right s
+            Nothing -> Left $ "Type mismatch: If condition expected"
+                    ++ fmtType TBool ++ " but got " ++ fmtType x
+
 inferTop :: Top -> Infer (TopT, Type, Subst)
 inferTop (Decl n e) = do
+    t <- newFresh
+
     env <- getEnv
-    (e', t, s) <- infer e
-    let s' = generalize (apply s env) t
+    let env' = env ++ [(n, Forall [] t)]
+    putEnv env'
+
+    (e', t', s) <- infer e
+    applyEnv s
+
+    s' <- case unify t t' of
+        Just s  -> return s
+        Nothing -> throwError $ "Type mismatch: Declaration " ++ n
+                ++ " expected " ++ fmtType t ++ " but got " ++ fmtType t'
+    applyEnv s'
+
+    let t'' = apply s' t'
+    let s' = generalize (apply s env) t''
     putEnv $ (n, s') : env
-    return (DeclT n e' t, t, s)
+
+    return (DeclT n e' t'', t'', s)
 
 inferTops :: [Top] -> Infer [TopT]
 inferTops tops = do

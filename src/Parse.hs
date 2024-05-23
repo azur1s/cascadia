@@ -79,12 +79,22 @@ exprLam = do
     reservedOp "->"
     Lam (map (, Nothing) vars) <$> expr
 
+exprIf :: Parser Expr
+exprIf = do
+    reserved "if"
+    c <- expr
+    reserved "then"
+    t <- expr
+    reserved "else"
+    If c t <$> expr
+
 atom :: Parser Expr
 atom = parens expr
     <|> exprInt
     <|> exprBool
     <|> exprVar
     <|> exprLam
+    <|> exprIf
 
 term :: Parser Expr
 term = atom >>= \x -> (many1 atom >>= \xs -> return $ App x xs)
