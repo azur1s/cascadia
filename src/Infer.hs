@@ -3,8 +3,6 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Infer where
 
-import Debug.Trace
-
 import Syntax
 import Control.Monad
 import Control.Monad.State
@@ -12,8 +10,11 @@ import Control.Monad.Except
 import Data.Bifunctor
 import Data.List
 
+tyLetters :: Int -> String
+tyLetters i = "'" ++ ([1..] >>= flip replicateM ['a'..'z']) !! i
+
 tyVar :: Int -> Type
-tyVar i = TVar $ "'" ++ ([1..] >>= flip replicateM ['a'..'z']) !! i
+tyVar i = TVar $ tyLetters i
 
 -- | Scheme
 data Scheme where

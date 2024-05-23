@@ -3,6 +3,7 @@ module Main where
 import Syntax
 import Parse
 import Infer
+import Renamer
 
 import System.Environment
 import Data.List (intercalate)
@@ -21,6 +22,7 @@ main = do
                     case runInfer $ inferTops tops of
                         Left err -> putStrLn err
                         Right topsT -> do
+                            let topsT' = runRenamer topsT
                             putStrLn $ "Inferred     : "
-                                ++ intercalate "\n               " (map fmtTopT topsT)
+                                ++ intercalate "\n               " (map fmtTopT topsT')
         _ -> putStrLn "Invalid arguments. Usage: cascadia <file>"
