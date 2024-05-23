@@ -1,0 +1,3 @@
+test = (\f -> f 1)(\x -> x)
+
+main = test 1
