@@ -186,4 +186,28 @@ infer env (Lam params e) = do
         t' = foldr TArrow t ts'
     return (LamT (zip (map fst params) ts') e' t', t', s)
 
-infer _ e = error $ "not implemented: " ++ show e
+infer env (Ops op l r) = do
+    -- Infer the types of the left and right operands
+    (l', lt, s1) <- infer env l
+    (r', rt, s2) <- infer (apply s1 env) r
+    -- Make sure that the types of the operands match the expected types
+    expected <- case op of
+        "+"  -> return TInt
+        "-"  -> return TInt
+        "*"  -> return TInt
+        "/"  -> return TInt
+        "==" -> return TInt
+        "&&" -> return TBool
+        "||" -> return TBool
+        _    -> throwError $ "unknown operator " ++ op
+    s3 <- case unify (apply s2 lt) expected of
+        Just s  -> return s
+        Nothing -> throwError $ "Type mismatch: expected " ++ fmtType expected
+                ++ " but got " ++ fmtType (apply s2 lt)
+    -- Make sure that both operands have the same type
+    s4 <- case unify (apply s3 rt) (apply s3 lt) of
+        Just s  -> return s
+        Nothing -> throwError $ "Type mismatch: expected " ++ fmtType (apply s3 lt)
+                ++ " but got " ++ fmtType (apply s3 rt)
+    return (OpsT op (apply s4 l') (apply s4 r') (apply s4 lt),
+        apply s4 lt, s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1)
