@@ -1,1 +1,1 @@
-test = (\x -> x + x == x);
+test x = x + x == x;

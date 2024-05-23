@@ -127,10 +127,12 @@ expr = Ex.buildExpressionParser table term
 decl :: Parser Top
 decl = do
     name <- ident
+    args <- many ident
     reservedOp "="
     body <- expr
     _ <- semi
-    return $ Decl name body
+    case args of [] -> return $ Decl name body
+                 _  -> return $ Decl name $ Lam (map (, Nothing) args) body
 
 top :: Parser Top
 top = decl
