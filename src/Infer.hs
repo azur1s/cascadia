@@ -163,12 +163,12 @@ infer env (App f args) = do
             return (args' ++ [arg'], ts ++ [at], s' `composeSubst` s))
         ([], [], nullSubst) args
 
-    t <- newFresh
-    let expected = foldr TArrow t ts
-    s3 <- case unify (apply s2 ft) expected of
+    t <- newFresh -- Return type of the application
+    let farr = foldr TArrow t ts
+    s3 <- case unify (apply s2 ft) farr of
         Just s  -> return s
-        Nothing -> throwError $ "Type mismatch: expected " ++ fmtType expected
-                ++ " but got " ++ fmtType (apply s2 ft)
+        Nothing -> throwError $ "Type mismatch: Application expected "
+                ++ fmtType (apply s2 ft) ++ " but got " ++ fmtType farr
 
     let t' = apply s3 t
     return (AppT (apply s3 f') (map (apply s3) at) t',
@@ -183,7 +183,7 @@ infer env (Lam params e) = do
     (e', t, s) <- infer env' e
     -- Create a function type from the parameter types to the body type
     let ts' = map (apply s) ts
-        t' = foldr TArrow t ts'
+        t' = foldr TArrow (apply s t) ts'
     return (LamT (zip (map fst params) ts') e' t', t', s)
 
 infer env (Ops op l r) = do

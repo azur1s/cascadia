@@ -15,7 +15,9 @@ main = do
             case runParser src of
                 Left err   -> print err
                 Right pexp -> do
-                    putStrLn $ "Parsed       : " ++ fmtExpr pexp ++ "     " ++ show pexp
+                    putStrLn $ "Parsed       : " ++ fmtExpr pexp
+                        ++ "\n\ESC[2;37m               " ++ show pexp
+                        ++ "\ESC[0m"
                     case runInfer $ infer [] pexp of
                         Left err -> putStrLn err
                         Right (e, t, s)

@@ -60,4 +60,8 @@ fmtType :: Type -> String
 fmtType TInt         = "Int"
 fmtType TBool        = "Bool"
 fmtType (TVar v)     = v
-fmtType (TArrow l r) = fmtType l ++ " -> " ++ fmtType r
+fmtType (TArrow l r) = fmt' l ++ " -> " ++ fmt' r
+    where fmt' x = case x of
+            TArrow _ _ -> "(" ++ fmtType x ++ ")"
+            _          -> fmtType x
+-- fmtType (TArrow l r) = "(" ++ fmtType l ++ " -> " ++ fmtType r ++ ")"
