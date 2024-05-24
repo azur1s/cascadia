@@ -70,14 +70,16 @@ instance Types ExprT where
     apply s (VarT v t)        = VarT v (apply s t)
     apply s (AppT f args t)   = AppT (apply s f) (map (apply s) args) (apply s t)
     apply s (LamT params e t) = LamT (map (second (apply s)) params) (apply s e) (apply s t)
-    apply s (OpsT op l r t)   = OpsT op (apply s l) (apply s r) (apply s t)
+    apply s (UnaT op e t)     = UnaT op (apply s e) (apply s t)
+    apply s (BinT op l r t)   = BinT op (apply s l) (apply s r) (apply s t)
     apply s (IfT c t e t')    = IfT (apply s c) (apply s t) (apply s e) (apply s t')
 
     ftv (LitT _)          = []
     ftv (VarT _ t)        = ftv t
     ftv (AppT f args t)   = ftv f ++ concatMap ftv args ++ ftv t
     ftv (LamT params e t) = ftv (map snd params) ++ ftv e ++ ftv t
-    ftv (OpsT _ l r t)    = ftv l ++ ftv r ++ ftv t
+    ftv (UnaT _ _ t)      = ftv t
+    ftv (BinT _ l r t)    = ftv l ++ ftv r ++ ftv t
     ftv (IfT c t e t')    = ftv c ++ ftv t ++ ftv e ++ ftv t'
 
 type TypeEnv = [(String, Scheme)]
@@ -212,7 +214,24 @@ infer (Lam params e) = do
         t' = foldr TArrow (apply s t) ts'
     return (LamT (zip (map fst params) ts') e' t', t', s)
 
-infer (Ops op l r) = do
+infer (Una op e) = do
+    (e', t, s) <- infer e
+    applyEnv s
+
+    (et, ret) <- case op of
+        "-" -> return (TInt, TInt)
+        "!" -> return (TBool, TBool)
+        _   -> throwError $ "unknown operator " ++ op
+
+    s' <- case unify et t of
+        Just s  -> return s
+        Nothing -> throwError $ "Type mismatch: Operator " ++ op
+                ++ " expected " ++ fmtType et ++ " but got " ++ fmtType t
+
+    let t' = apply s' ret
+    return (UnaT op (apply s' e') t', t', s' `composeSubst` s)
+
+infer (Bin op l r) = do
     -- Infer the types of the left and right operands
     (l', lt, s1) <- infer l
     applyEnv s1
@@ -233,7 +252,7 @@ infer (Ops op l r) = do
     applyEnv s4
 
     let t = apply s4 ret
-    return (OpsT op (apply s4 l') (apply s4 r') t, t,
+    return (BinT op (apply s4 l') (apply s4 r') t, t,
         s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1)
     where
         checkOperand x t = case unify x t of

@@ -28,7 +28,7 @@ renameExprT :: ExprT -> Renamer ExprT
 renameExprT (VarT v t)        = VarT v <$> renameType t
 renameExprT (AppT f args t)   = AppT <$> renameExprT f <*> mapM renameExprT args <*> renameType t
 renameExprT (LamT params e t) = LamT <$> mapM (\(v, t') -> (,) v <$> renameType t') params <*> renameExprT e <*> renameType t
-renameExprT (OpsT op l r t)   = OpsT op <$> renameExprT l <*> renameExprT r <*> renameType t
+renameExprT (BinT op l r t)   = BinT op <$> renameExprT l <*> renameExprT r <*> renameType t
 renameExprT e = return e
 
 renameTop :: TopT -> Renamer TopT

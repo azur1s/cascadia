@@ -21,8 +21,8 @@ reservedNames = [
     "else"
   ]
 
-reservedOps :: [String]
-reservedOps = [
+reservedBin :: [String]
+reservedBin = [
     "->",
     "\\",
     "+",
@@ -42,7 +42,7 @@ lexer = P.makeTokenParser $ P.LanguageDef
     , P.opStart         = oneOf ":!#$%&*+./<=>?@\\^|-~"
     , P.opLetter        = oneOf ":!#$%&*+./<=>?@\\^|-~"
     , P.reservedNames   = reservedNames
-    , P.reservedOpNames = reservedOps
+    , P.reservedOpNames = reservedBin
     , P.caseSensitive   = True
     }
 
@@ -104,24 +104,28 @@ expr :: Parser Expr
 expr = Ex.buildExpressionParser table term
     where
         table = [
-            [ binary "*"  (Ops "*")
-            , binary "/"  (Ops "/")
-            , binary "%"  (Ops "%")
+            [ unary  "-"  (Una "-")
+            , unary  "!"  (Una "!")
             ],
-            [ binary "+"  (Ops "+")
-            , binary "-"  (Ops "-")
+            [ binary "*"  (Bin "*")
+            , binary "/"  (Bin "/")
+            , binary "%"  (Bin "%")
             ],
-            [ binary "==" (Ops "==")
-            , binary "!=" (Ops "!=")
-            , binary "<"  (Ops "<")
-            , binary "<=" (Ops "<=")
-            , binary ">"  (Ops ">")
-            , binary ">=" (Ops ">=")
+            [ binary "+"  (Bin "+")
+            , binary "-"  (Bin "-")
             ],
-            [ binary "&&" (Ops "&&")
-            , binary "||" (Ops "||")
+            [ binary "==" (Bin "==")
+            , binary "!=" (Bin "!=")
+            , binary "<"  (Bin "<")
+            , binary "<=" (Bin "<=")
+            , binary ">"  (Bin ">")
+            , binary ">=" (Bin ">=")
+            ],
+            [ binary "&&" (Bin "&&")
+            , binary "||" (Bin "||")
             ]
           ]
+        unary  name f = Ex.Prefix (reservedOp name >> return f)
         binary name f = Ex.Infix (reservedOp name >> return f) Ex.AssocLeft
 
 decl :: Parser Top
