@@ -3,13 +3,13 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Infer where
 
+import Header
 import Syntax
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Except
 import Data.Bifunctor
 import Data.List
-import Debug.Trace (traceM)
 
 tyLetters :: Int -> String
 tyLetters i = "'" ++ ([1..] >>= flip replicateM ['a'..'z']) !! i
@@ -144,8 +144,13 @@ putEnv env = modify $ second (const env)
 applyEnv :: Subst -> Infer ()
 applyEnv s = getEnv >>= putEnv . apply s
 
-runInfer :: Infer a -> Either String a
-runInfer m = runExcept $ evalStateT m (0, [])
+runInferM :: Infer a -> Either String a
+runInferM m = runExcept $ evalStateT m (0, [])
+
+runInfer :: [Top] -> Result [TopT]
+runInfer tops = case runInferM $ inferTops tops of
+    Left err    -> Err $ InferError err
+    Right topsT -> Yay topsT
 
 newFresh :: Infer Type
 newFresh = do

@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 module Parse where
 
+import Header
 import Syntax
 
 import Data.Functor.Identity
@@ -144,5 +145,7 @@ top = decl
 modl :: Parser [Top]
 modl = many top
 
-runParser :: String -> String -> Either ParseError [Top]
-runParser src path = parse (contents modl) path $ L.pack src
+runParser :: String -> String -> Result [Top]
+runParser src path = case parse (contents modl) path $ L.pack src of
+    Left err -> Err $ ParseError err
+    Right ts -> Yay ts

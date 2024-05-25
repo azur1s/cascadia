@@ -73,6 +73,18 @@ fmtType (TArrow l r) = fmt' l ++ " -> " ++ fmtType r
             TArrow _ _ -> "(" ++ fmtType x ++ ")"
             _          -> fmtType x
 
+-- | Expression with CPS
+data ExprCPS
+    = LitCPS Lit
+    | VarCPS String Type
+    | AppCPS ExprCPS [ExprCPS] Type
+    | LamCPS [(String, Type)] ExprCPS Type
+    | UnaCPS String ExprCPS Type
+    | BinCPS String ExprCPS ExprCPS Type
+    | IfCPS ExprCPS ExprCPS ExprCPS Type
+    | ContCPS String ExprCPS
+    deriving (Show, Eq)
+
 -- | Top-level statements
 data Top
     = Decl String Expr
