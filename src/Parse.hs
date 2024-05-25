@@ -76,9 +76,10 @@ exprVar = Var <$> ident
 exprLam :: Parser Expr
 exprLam = do
     reservedOp "\\"
-    vars <- many ident
+    xs <- many1 ident
     reservedOp "->"
-    Lam (map (, Nothing) vars) <$> expr
+    e <- expr
+    return $ foldr (uncurry Lam . (, Nothing)) e xs
 
 exprIf :: Parser Expr
 exprIf = do
@@ -98,7 +99,7 @@ atom = parens expr
     <|> exprIf
 
 term :: Parser Expr
-term = atom >>= \x -> (many1 atom >>= \xs -> return $ App x xs)
+term = atom >>= \x -> (many1 atom >>= \xs -> return $ foldl App x xs)
     <|> return x
 
 expr :: Parser Expr
@@ -137,13 +138,18 @@ decl = do
     body <- expr
     _ <- semi
     case args of [] -> return $ Decl name body
-                 _  -> return $ Decl name $ Lam (map (, Nothing) args) body
+                 _  -> return $ Decl name $ foldr (uncurry Lam . (, Nothing)) body args
 
 top :: Parser Top
 top = decl
 
 modl :: Parser [Top]
 modl = many top
+
+runParserExpr :: String -> String -> Result Expr
+runParserExpr src path = case parse (contents expr) path $ L.pack src of
+    Left err -> Err $ ParseError err
+    Right e  -> Yay e
 
 runParser :: String -> String -> Result [Top]
 runParser src path = case parse (contents modl) path $ L.pack src of

@@ -66,21 +66,21 @@ instance Types Scheme where
     ftv (Forall as t) = ftv t \\ as
 
 instance Types ExprT where
-    apply _ (LitT l)          = LitT l
-    apply s (VarT v t)        = VarT v (apply s t)
-    apply s (AppT f args t)   = AppT (apply s f) (map (apply s) args) (apply s t)
-    apply s (LamT params e t) = LamT (map (second (apply s)) params) (apply s e) (apply s t)
-    apply s (UnaT op e t)     = UnaT op (apply s e) (apply s t)
-    apply s (BinT op l r t)   = BinT op (apply s l) (apply s r) (apply s t)
-    apply s (IfT c t e t')    = IfT (apply s c) (apply s t) (apply s e) (apply s t')
+    apply _ (LitT l t)         = LitT l t
+    apply s (VarT v t)         = VarT v (apply s t)
+    apply s (AppT f e t)       = AppT (apply s f) (apply s e) (apply s t)
+    apply s (LamT (x, xt) e t) = LamT (x, apply s xt) (apply s e) (apply s t)
+    apply s (UnaT op e t)      = UnaT op (apply s e) (apply s t)
+    apply s (BinT op l r t)    = BinT op (apply s l) (apply s r) (apply s t)
+    apply s (IfT c t e t')     = IfT (apply s c) (apply s t) (apply s e) (apply s t')
 
-    ftv (LitT _)          = []
-    ftv (VarT _ t)        = ftv t
-    ftv (AppT f args t)   = ftv f ++ concatMap ftv args ++ ftv t
-    ftv (LamT params e t) = ftv (map snd params) ++ ftv e ++ ftv t
-    ftv (UnaT _ _ t)      = ftv t
-    ftv (BinT _ l r t)    = ftv l ++ ftv r ++ ftv t
-    ftv (IfT c t e t')    = ftv c ++ ftv t ++ ftv e ++ ftv t'
+    ftv (LitT _ _)         = []
+    ftv (VarT _ t)         = ftv t
+    ftv (AppT f e t)       = ftv f ++ ftv e ++ ftv t
+    ftv (LamT (_, xt) e t) = ftv xt ++ ftv e ++ ftv t
+    ftv (UnaT _ _ t)       = ftv t
+    ftv (BinT _ l r t)     = ftv l ++ ftv r ++ ftv t
+    ftv (IfT c t e t')     = ftv c ++ ftv t ++ ftv e ++ ftv t'
 
 type TypeEnv = [(String, Scheme)]
 
@@ -152,6 +152,11 @@ runInfer tops = case runInferM $ inferTops tops of
     Left err    -> Err $ InferError err
     Right topsT -> Yay topsT
 
+runInferExpr :: Expr -> Result ExprT
+runInferExpr e = case runInferM $ infer e of
+    Left  err        -> Err $ InferError err
+    Right (e', _, _) -> Yay e'
+
 newFresh :: Infer Type
 newFresh = do
     i <- getCounter
@@ -172,52 +177,47 @@ lookupEnv env v = case lookup v env of
     Nothing -> throwError $ "unbound variable " ++ v
 
 infer :: Expr -> Infer (ExprT, Type, Subst)
-infer (Lit l) = return (LitT l, litType l, nullSubst)
-    where
-        litType (LInt _)  = TInt
-        litType (LBool _) = TBool
+infer (Lit l) = return (LitT l t, t, nullSubst)
+    where t = case l of
+            LInt  _ -> TInt
+            LBool _ -> TBool
 
 infer (Var v) = do
     env <- getEnv
     t <- lookupEnv env v
     return (VarT v t, t, nullSubst)
 
-infer (App f args) = do
+infer (App f x) = do
     -- Infer the type of the function
     (f', ft, s1) <- infer f
-    -- Infer the types of the arguments
-    (at, ts, s2) <- foldM
-        (\(args', ts, s) arg -> do
-            applyEnv s
-            (arg', at, s') <- infer arg
-            return (args' ++ [arg'], ts ++ [at], s' `composeSubst` s))
-        ([], [], nullSubst) args
+    -- Infer the types of the argument
+    (x', xt, s2) <- infer x
 
     t <- newFresh -- Return type of the application
-    let farr = foldr TArrow t ts
+    let farr = TArrow t xt
     s3 <- case unify (apply s2 ft) farr of
         Just s  -> return s
         Nothing -> throwError $ "Type mismatch: Application expected "
                 ++ fmtType (apply s2 ft) ++ " but got " ++ fmtType farr
 
     let t' = apply s3 t
-    return (AppT (apply s3 f') (map (apply s3) at) t',
+    return (AppT (apply s3 f') (apply s3 x') t',
         t', s3 `composeSubst` s2 `composeSubst` s1)
 
-infer (Lam params e) = do
-    -- Create a new type variable for each parameter
-    ts <- mapM (const newFresh) params
-    -- Create a new environment with the parameters and their types
+infer (Lam x t e) = do
+    -- Create a new type variable for parameter
+    t <- maybe newFresh return t
+    -- Create a new environment with the parameter type
     env <- getEnv
-    let env' = env ++ zip (map fst params) (map (Forall []) ts)
+    let env' = env ++ [(x, Forall [] t)]
     putEnv env'
     -- Infer the type of the lambda body
     (e', t, s) <- infer e
     putEnv env
     -- Create a function type from the parameter types to the body type
-    let ts' = map (apply s) ts
-        t' = foldr TArrow (apply s t) ts'
-    return (LamT (zip (map fst params) ts') e' t', t', s)
+    let t'  = apply s t
+        tf' = TArrow (apply s t) t'
+    return (LamT (x, t') e' tf', tf', s)
 
 infer (Una op e) = do
     (e', t, s) <- infer e

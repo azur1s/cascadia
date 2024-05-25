@@ -5,6 +5,7 @@ import Syntax
 import Parse
 import Infer
 import Renamer
+import CPS
 
 import System.Environment
 import Data.List (intercalate)
@@ -17,11 +18,15 @@ go src path =
 
 main :: IO ()
 main = do
-    args <- getArgs
-    case args of
-        [file] -> do
-            src <- readFile file
-            case go src file of
-                Yay tops -> putStrLn $ intercalate "\n" (map fmtTopT tops)
-                Err err  -> putStrLn $ fmtErrKind err
-        _ -> putStrLn "Invalid arguments. Usage: cascadia <file>"
+    case runParserExpr "(\\f x -> f x) (\\x -> x) 69" "<none>" >>= runInferExpr of
+        Yay e   -> putStrLn $ fmtExprT e
+        Err err -> putStrLn $ fmtErrKind err
+
+    -- args <- getArgs
+    -- case args of
+    --     [file] -> do
+    --         src <- readFile file
+    --         case go src file of
+    --             Yay tops -> putStrLn $ intercalate "\n" (map fmtTopT tops)
+    --             Err err  -> putStrLn $ fmtErrKind err
+    --     _ -> putStrLn "Invalid arguments. Usage: cascadia <file>"

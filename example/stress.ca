@@ -7,7 +7,7 @@ I x     = x;
 K x y   = x;
 S f g x = f x (g x);
 
-succ n f x= f (n f x);
+succ n f x = f (n f x);
 
 zero  f x = x;
 one   f x = succ zero;
